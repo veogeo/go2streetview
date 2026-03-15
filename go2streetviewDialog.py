@@ -19,12 +19,13 @@ go2streetview
  ***************************************************************************/
 """
 
-from PyQt5 import Qt, QtCore, QtWidgets, QtGui, uic
+from qgis.PyQt import QtCore, QtWidgets, QtGui, uic
+from qgis.PyQt.QtCore import Qt
 from qgis import core, utils, gui
 
 import json
 import os
-#import html.parser as HTMLParser
+# import html.parser as HTMLParser
 import html
 import xml.sax.saxutils
 import resources_rc
@@ -54,32 +55,38 @@ class go2streetviewDialog(QtWidgets.QDockWidget, MAIN_DIALOG_CLASS):
     enter_ev = QtCore.pyqtSignal(int, name='enter')
 
     def __init__(self):
-        QtWidgets.QDialog.__init__(self)
+        super().__init__()
         self.setupUi(self)
 
     def closeEvent(self, event):
         print("closed")
         self.closed_ev.emit(1)
+        event.accept()
 
-    def resizeEvent (self, event):
+    def resizeEvent(self, event):
         print("resized")
         self.resized_ev.emit(1)
+        event.accept()
 
-    def enterEvent (self,event):
+    def enterEvent(self, event):
         print("entered")
         self.enter_ev.emit(1)
+        event.accept()
+
 
 # create the annotation dialog
 class snapshotNotesDialog(QtWidgets.QDialog, NOTES_DIALOG_CLASS):
     def __init__(self):
-        QtWidgets.QDialog.__init__(self)
+        super().__init__()
         self.setupUi(self)
+
 
 # create the License dialog
 class snapshotLicenseDialog(QtWidgets.QDialog, LICENSE_DIALOG_CLASS):
     def __init__(self):
-        QtWidgets.QDialog.__init__(self)
+        super().__init__()
         self.setupUi(self)
+
 
 # create the dummy widget
 class dumWidget(QtWidgets.QDialog, DUM_DIALOG_CLASS):
@@ -87,21 +94,23 @@ class dumWidget(QtWidgets.QDialog, DUM_DIALOG_CLASS):
     enter_ev = QtCore.pyqtSignal(int, name='enter')
 
     def __init__(self):
-        QtWidgets.QDialog.__init__(self)
+        super().__init__()
         self.setupUi(self)
 
-    def enterEvent (self,event):
+    def enterEvent(self, event):
         self.enter_ev.emit(1)
+        event.accept()
 
-#create the infobox dialog
-class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
+
+# create the infobox dialog
+class infobox(QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
 
     defined = QtCore.pyqtSignal()
 
-    def __init__(self,parentModule):
-        QtWidgets.QDialog.__init__(self)
+    def __init__(self, parentModule):
+        super().__init__()
         # Set up the user interface from Designer.
-        #self.ui = Ui_Dialog()
+        # self.ui = Ui_Dialog()
         self.parentModule = parentModule
         self.iface = parentModule.iface
         self.setupUi(self)
@@ -116,12 +125,12 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
         self.iconPath.setText(self.tr("Icon Path"))
         self.layersCombo.clear()
         self.distanceBuffer.setText("")
-        self.distanceBuffer.setValidator(QtGui.QIntValidator(1,1000,self))
-        self.infoBoxIni = {'infoLayerEnabled': None,'infoBoxTemplate': u'','infoField': '','infoBoxEnabled': None,'iconPath': '','infoLayer': '','distanceBuffer':'100',"mapCommandsEnabled":None}
+        self.distanceBuffer.setValidator(QtGui.QIntValidator(1, 1000, self))
+        self.infoBoxIni = {'infoLayerEnabled': None, 'infoBoxTemplate': u'', 'infoField': '', 'infoBoxEnabled': None, 'iconPath': '', 'infoLayer': '', 'distanceBuffer': '100', "mapCommandsEnabled": None}
         self.layerSet = {}
         self.infoIndex = None
 
-    def enableInfoLayerAction(self,state):
+    def enableInfoLayerAction(self, state):
         if self.enableInfoLayerCheckbox.isChecked():
             self.layersCombo.setEnabled(True)
             self.infoField.setEnabled(True)
@@ -145,8 +154,7 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
             self.editIconPath.setEnabled(False)
             self.parentModule.disableControlShape()
 
-
-    def enableInfoBoxAction(self,state):
+    def enableInfoBoxAction(self, state):
         if self.enableInfoBoxCheckbox.isChecked():
             self.infoboxHtml.setEnabled(True)
             self.editInfoBoxHtml.setEnabled(True)
@@ -156,13 +164,14 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
             self.editInfoBoxHtml.setEnabled(False)
             self.mapCommandsCheck.setEnabled(False)
 
-
-    def layersComboAction(self,idx):
+    def layersComboAction(self, idx):
         txt = self.layersCombo.currentText()
         if txt and txt != "" and txt != self.tr("Select Info Layer"):
             self.infoBoxIni["infoLayer"] = txt
-            #set dialog to default
+            # set dialog to default
             units = self.layerSet[txt].crs().mapUnits()
+            dValue = ''
+            uStr = ''
             if units == core.QgsUnitTypes.DistanceMeters:
                 dValue = '100'
                 uStr = self.tr("(Meters)")
@@ -184,14 +193,13 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
             self.infoboxHtml.clear()
             self.iconPath.clear()
             self.enableInfoBoxCheckbox.setCheckState(QtCore.Qt.Unchecked)
-            #self.infoBoxIni = {'infoLayerEnabled': None,'infoBoxTemplate': u'','infoField': '','infoBoxEnabled': None,'iconPath': '','infoLayer': '','distanceBuffer':'100'}
+            # self.infoBoxIni = {'infoLayerEnabled': None,'infoBoxTemplate': u'','infoField': '','infoBoxEnabled': None,'iconPath': '','infoLayer': '','distanceBuffer':'100'}
             self.saveIni()
 
-
-    def loadPointLayers(self,default = None):
+    def loadPointLayers(self, default=None):
         self.layerSet = {}
-        for layer_name, layer in core.QgsProject.instance().mapLayers().items():
-            
+        # for layer_name, layer in core.QgsProject.instance().mapLayers().items():
+        for layer in core.QgsProject.instance().mapLayers().values():
             if layer.type() == core.QgsMapLayer.VectorLayer and (layer.geometryType() in (core.QgsWkbTypes.PointGeometry, core.QgsWkbTypes.LineGeometry, core.QgsWkbTypes.PolygonGeometry)):
                 self.layerSet[layer.name()] = layer
         if default:
@@ -201,13 +209,12 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
                 defaultLayer = None
         else:
             defaultLayer = None
-        self.populateComboBox(self.layersCombo,self.layerSet.keys(),predef=defaultLayer,sort = True,msg=self.tr("Select Info Layer"))
+        self.populateComboBox(self.layersCombo, self.layerSet.keys(), predef=defaultLayer, sort=True, msg=self.tr("Select Info Layer"))
         self.layersCombo.activated.connect(self.layersComboAction)
 
-
-    def loadFields(self,layer,default = None):
+    def loadFields(self, layer, default=None):
         if layer and layer != "":
-            fieldNames = [field.name() for field in layer.pendingFields() ]
+            fieldNames = [field.name() for field in layer.fields()]
             if default:
                 if default in fieldNames:
                     defaultField = default
@@ -215,36 +222,35 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
                     defaultField = None
             else:
                 defaultField = None
-            self.populateComboBox(self.fieldsCombo,fieldNames,predef=defaultField,msg=self.tr("Select Info Field"))
-            #self.fieldsCombo.activated.connect(self.fieldsComboAction)
-
+            self.populateComboBox(self.fieldsCombo, fieldNames, predef=defaultField, msg=self.tr("Select Info Field"))
+            # self.fieldsCombo.activated.connect(self.fieldsComboAction)
 
     def editInfoBoxHtmlAction(self):
         if self.infoBoxIni["infoLayer"] in self.layerSet.keys():
-            self.QEX = gui.QgsExpressionBuilderDialog(self.layerSet[self.infoBoxIni["infoLayer"]],"Insert expression",None)
+            self.QEX = gui.QgsExpressionBuilderDialog(self.layerSet[self.infoBoxIni["infoLayer"]], "Insert expression", None)
             self.QEX.setExpressionText(self.infoboxHtml.textCursor().selectedText().strip('[%').strip('%]').strip())
             if self.QEX.exec_():
                 self.infoboxHtml.insertPlainText('[% {} %]'.format(self.QEX.expressionText()))
 
     def editInfoFieldAction(self):
         if self.infoBoxIni["infoLayer"] in self.layerSet.keys():
-            self.QEX = gui.QgsExpressionBuilderDialog(self.layerSet[self.infoBoxIni["infoLayer"]],"Insert expression",None)
+            self.QEX = gui.QgsExpressionBuilderDialog(self.layerSet[self.infoBoxIni["infoLayer"]], "Insert expression", None)
             self.QEX.setExpressionText(self.infoField.text().strip('[%').strip('%]').strip())
             if self.QEX.exec_():
                 self.infoField.setText('[% {} %]'.format(self.QEX.expressionText()))
 
     def editIconPathAction(self):
         if self.infoBoxIni["infoLayer"] in self.layerSet.keys():
-            self.QEX = gui.QgsExpressionBuilderDialog(self.layerSet[self.infoBoxIni["infoLayer"]],"Insert expression",None)
+            self.QEX = gui.QgsExpressionBuilderDialog(self.layerSet[self.infoBoxIni["infoLayer"]], "Insert expression", None)
             self.QEX.setExpressionText(self.iconPath.text().strip('[%').strip('%]').strip())
             if self.QEX.exec_():
                 self.iconPath.setText('[% {} %]'.format(self.QEX.expressionText()))
 
-    def populateComboBox(self,combo,list,predef = None,sort = None,msg = ""):
-        #procedure to fill specified combobox with provided list
+    def populateComboBox(self, combo, item_list, predef=None, sort=None, msg=""):
+        # procedure to fill specified combobox with provided list
         combo.clear()
-        model=QtGui.QStandardItemModel(combo)
-        for elem in list:
+        model = QtGui.QStandardItemModel(combo)
+        for elem in item_list:
             try:
                 item = QtGui.QStandardItem(elem)
             except TypeError:
@@ -257,68 +263,68 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
         if idx != -1:
             combo.setCurrentIndex(idx)
         else:
-            combo.insertItem(0,msg)
+            combo.insertItem(0, msg)
             combo.setCurrentIndex(0)
 
-    def copyToTextBox(self,valid):
+    def copyToTextBox(self, valid):
         if valid:
-            self.infoboxHtml.setPlainText (self.QEX.expressionText())
+            self.infoboxHtml.setPlainText(self.QEX.expressionText())
 
-    def get_featureContext(self,feat):
+    def get_featureContext(self, feat):
         infoboxContext = core.QgsExpressionContext()
         infoboxContext.appendScopes(core.QgsExpressionContextUtils.globalProjectLayerScopes(self.getInfolayer()))
         infoboxContext.setFeature(feat)
         infoboxContext.setFields(self.getInfolayer().fields())
         return infoboxContext
 
-    def getHtml(self,feat):
+    def getHtml(self, feat):
         if self.infoBoxIni["infoLayer"] in self.layerSet.keys() and self.enableInfoBoxCheckbox.isChecked():
             htmlExp = core.QgsExpression()
-            html = htmlExp.replaceExpressionText(self.infoboxHtml.toPlainText().replace("\n",""), self.get_featureContext(feat))
-            if html:
-                html = html.replace("\n","")
-                html = html.replace('"',"")
-                html = html.replace("'","")
-                return html
+            html_content = htmlExp.replaceExpressionText(self.infoboxHtml.toPlainText().replace("\n", ""), self.get_featureContext(feat))
+            if html_content:
+                html_content = html_content.replace("\n", "")
+                html_content = html_content.replace('"', "")
+                html_content = html_content.replace("'", "")
+                return html_content
             else:
                 return ""
         else:
             return ""
 
-    def getInfoField(self,feat):
+    def getInfoField(self, feat):
         if self.infoBoxIni["infoLayer"] in self.layerSet.keys() and self.infoField.text() != "":
             infoFieldExp = core.QgsExpression()
             content = infoFieldExp.replaceExpressionText(self.infoField.text(), self.get_featureContext(feat))
             if content:
-                content = content.replace("\n","")
-                content = content.replace('"',"")
-                content = content.replace("'","")
+                content = content.replace("\n", "")
+                content = content.replace('"', "")
+                content = content.replace("'", "")
             return content
         return ""
 
-    def getFeatId(self,feat):
+    def getFeatId(self, feat):
         if self.mapCommandsCheck.isChecked():
             return feat.id()
         else:
             return 0
 
-    def getIconPath(self,feat):
+    def getIconPath(self, feat):
         if self.infoBoxIni["infoLayer"] in self.layerSet.keys() and self.iconPath.text() != "":
             iconPathExp = core.QgsExpression()
-            content = iconPathExp.replaceExpressionText(self.iconPath.text().replace("\n",""), self.get_featureContext(feat))
+            content = iconPathExp.replaceExpressionText(self.iconPath.text().replace("\n", ""), self.get_featureContext(feat))
             return content
         return ""
 
-    def getFieldContent(self,feat):
+    def getFieldContent(self, feat):
         if self.infoBoxIni["infoLayer"] in self.layerSet.keys():
-            idx = self.layerSet[self.infoBoxIni["infoLayer"]].fieldNameIndex(self.infoBoxIni["infoField"])
+            idx = self.layerSet[self.infoBoxIni["infoLayer"]].fields().indexOf(self.infoBoxIni["infoField"])
             return feat.attributes()[idx]
+        return None
 
     def getInfolayer(self):
         if self.infoBoxIni["infoLayer"] in self.layerSet.keys():
             return self.layerSet[self.infoBoxIni["infoLayer"]]
-        else:
-            return None
+        return None
 
     def isEnabled(self):
         return self.infoBoxIni["infoLayerEnabled"]
@@ -330,15 +336,15 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
         return float(self.infoBoxIni["distanceBuffer"])
 
     def restoreIni(self):
-        #prjFileInfo = QtCore.QFileInfo(core.QgsProject.instance().fileName())
-        #iniFileInfo = QtCore.QFileInfo(os.path.join(prjFileInfo.path(),prjFileInfo.baseName()+".gsv"))
+        # prjFileInfo = QtCore.QFileInfo(core.QgsProject.instance().fileName())
+        # iniFileInfo = QtCore.QFileInfo(os.path.join(prjFileInfo.path(),prjFileInfo.baseName()+".gsv"))
         stored_settings = core.QgsExpressionContextUtils.projectScope(core.QgsProject.instance()).variable('go2sv_infolayer_settings')
         if stored_settings:
             self.infoBoxIni = json.loads(stored_settings)
-            self.loadPointLayers(default = self.infoBoxIni["infoLayer"])
+            self.loadPointLayers(default=self.infoBoxIni["infoLayer"])
             self.infoField.setText(self.infoBoxIni["infoField"])
         else:
-            self.infoBoxIni = {'infoLayerEnabled': None,'infoBoxTemplate': u'','infoField': '','infoBoxEnabled': None,'iconPath': '','infoLayer': '','distanceBuffer':'100',"mapCommandsEnabled":None}
+            self.infoBoxIni = {'infoLayerEnabled': None, 'infoBoxTemplate': u'', 'infoField': '', 'infoBoxEnabled': None, 'iconPath': '', 'infoLayer': '', 'distanceBuffer': '100', "mapCommandsEnabled": None}
             self.loadPointLayers()
         if self.infoBoxIni["infoLayerEnabled"]:
             self.enableInfoLayerCheckbox.setCheckState(QtCore.Qt.Checked)
@@ -356,10 +362,9 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
             self.enableInfoBoxCheckbox.setCheckState(QtCore.Qt.Unchecked)
         self.infoboxHtml.setPlainText(html.unescape(self.infoBoxIni["infoBoxTemplate"]))
         self.enableInfoLayerAction(True)
-        if self.infoIndex and self.enableInfoLayerCheckbox.isChecked():
+        if self.infoIndex is not None and self.enableInfoLayerCheckbox.isChecked():
             self.updateSpatialIndex()
         self.defined.emit()
-
 
     def saveIni(self):
         self.infoBoxIni["infoLayerEnabled"] = self.enableInfoLayerCheckbox.isChecked()
@@ -378,28 +383,28 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
         self.infoBoxIni["infoBoxTemplate"] = xml.sax.saxutils.escape(self.infoboxHtml.toPlainText())
         core.QgsExpressionContextUtils.setProjectVariable(core.QgsProject.instance(), 'go2sv_infolayer_settings', json.dumps(self.infoBoxIni))
 
-    def showEvent(self,event):
+    def showEvent(self, event):
         self.raise_()
         self.restoreIni()
+        event.accept()
 
-    def getContextFeatures(self,point):
+    def getContextFeatures(self, point):
         dist = self.getDistanceBuffer()
-        context = core.QgsRectangle(point.x()-dist,point.y()-dist,point.x()+dist,point.y()+dist)
+        context = core.QgsRectangle(point.x()-dist, point.y()-dist, point.x()+dist, point.y()+dist)
         try:
             return self.infoIndex.intersects(context)
         except:
             return []
 
-
     def updateSpatialIndex(self):
         if self.enableInfoLayerCheckbox.isChecked():
-            self.infoIndex = core.QgsSpatialIndex ()
+            self.infoIndex = core.QgsSpatialIndex()
             self.progressBar.show()
-            self.progressBar.setRange(0,self.getInfolayer().featureCount ())
+            self.progressBar.setRange(0, self.getInfolayer().featureCount())
             infoFeats = self.getInfolayer().getFeatures()
             processed = 0
             for feat in infoFeats:
-                self.infoIndex.insertFeature(feat)
+                self.infoIndex.addFeature(feat)
                 self.progressBar.setValue(processed)
                 processed += 1
             self.progressBar.hide()
@@ -419,4 +424,3 @@ class infobox (QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
 
     def rejectInfoBoxState(self):
         self.hide()
-
