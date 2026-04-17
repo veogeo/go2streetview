@@ -22,7 +22,11 @@ from qgis.PyQt import QtCore, QtWidgets, QtGui
 from qgis import core, utils, gui
 from .go2streetviewDialog import snapshotNotesDialog
 
-import resources_rc
+try:
+    from . import resources_rc_qt6 as resources_rc
+except ImportError:
+    from . import resources_rc_qt5 as resources_rc
+
 import webbrowser
 from urllib.request import urlopen
 import os

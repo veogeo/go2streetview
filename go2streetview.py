@@ -20,22 +20,34 @@
 """
 from qgis.PyQt.QtWidgets import QApplication
 from qgis.PyQt import QtCore, QtGui, QtWidgets, QtXml, QtNetwork, uic
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, pyqtSlot, qVersion, QVariant
-from qgis.PyQt.QtWebEngineWidgets import QWebEngineView
-from qgis.PyQt.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
-from qgis.PyQt.QtWebChannel import QWebChannel
-from qgis.PyQt import QtWebEngineWidgets
+
+from qgis.PyQt.QtCore import (
+    QSettings,
+    QTranslator,
+    QCoreApplication,
+    Qt,
+    pyqtSlot,
+    qVersion
+)
+
+# QVariant (solo Qt5)
+try:
+    from qgis.PyQt.QtCore import QVariant
+except ImportError:
+    QVariant = None
+
+# ❌ ELIMINADO: from qgis.PyQt import QtWebEngineWidgets
+
 from qgis import core, utils, gui
 from qgis.utils import iface, qgsfunction, plugins
 from string import digits
 from .go2streetviewDialog import go2streetviewDialog, dumWidget, snapshotLicenseDialog, infobox
 from .snapshot import snapShot
 from .transformgeom import transformGeometry
-# from py_tiled_layer.tilelayer import TileLayer, TileLayerType
-# from py_tiled_layer.tiles import TileServiceInfo
-
-import resources_rc
-
+try:
+    from . import resources_rc_qt6 as resources_rc
+except ImportError:
+    from . import resources_rc_qt5 as resources_rc
 import webbrowser
 import tempfile
 import os
@@ -47,11 +59,86 @@ from qgis.PyQt import sip
 import pathlib
 import datetime
 
+# ==============================
+# WebEngine COMPAT (Qt5 / Qt6)
+# ==============================
+
+try:
+    # QGIS wrapper primero
+    from qgis.PyQt.QtWebEngineWidgets import QWebEngineView
+    from qgis.PyQt import QtWebEngineWidgets
+
+    try:
+        # Qt6
+        from qgis.PyQt.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
+    except ImportError:
+        # Qt5
+        from qgis.PyQt.QtWebEngineWidgets import QWebEngineSettings, QWebEnginePage
+
+    try:
+        from qgis.PyQt.QtWebChannel import QWebChannel
+    except ImportError:
+        from PyQt6.QtWebChannel import QWebChannel
+
+except ImportError:
+    # Fallback PyQt directo
+    try:
+        # Qt6
+        from PyQt6.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
+        from PyQt6.QtWebEngineCore import QWebEngineSettings
+        from PyQt6.QtWebChannel import QWebChannel
+        QT_VERSION = 6
+    except ImportError:
+        # Qt5
+        from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineSettings
+        from PyQt5.QtWebChannel import QWebChannel
+        QT_VERSION = 5
+else:
+    # Detectar versión desde QGIS
+    try:
+        from qgis.PyQt.QtCore import QT_VERSION_STR
+        QT_VERSION = int(QT_VERSION_STR.split('.')[0])
+    except Exception:
+        QT_VERSION = None
+
+
 DEBUG_PORT = '5588'
 DEBUG_URL = 'http://127.0.0.1:%s' % DEBUG_PORT
 os.environ['QTWEBENGINE_REMOTE_DEBUGGING'] = DEBUG_PORT
 
 H_SV_CAMERA = 2.7
+
+
+def web_attr(attr):
+    # Qt6
+    if hasattr(QWebEngineSettings, "WebAttribute"):
+        return getattr(QWebEngineSettings.WebAttribute, attr)
+    # Qt5
+    return getattr(QWebEngineSettings, attr)
+
+
+def toolbutton_popup_mode(mode):
+    if hasattr(QtWidgets.QToolButton, "ToolButtonPopupMode"):
+        return getattr(QtWidgets.QToolButton.ToolButtonPopupMode, mode)  # Qt6
+    return getattr(QtWidgets.QToolButton, mode)  # Qt5
+
+
+def qt_color(color):
+    if hasattr(QtCore.Qt, "GlobalColor"):  # Qt6
+        return getattr(QtCore.Qt.GlobalColor, color)
+    return getattr(QtCore.Qt, color)       # Qt5
+
+
+def qt_checkstate(state):
+    if hasattr(QtCore.Qt, "CheckState"):  # Qt6
+        return getattr(QtCore.Qt.CheckState, state)
+    return getattr(QtCore.Qt, state)      # Qt5
+
+
+def qt_window_flag(flag):
+    if hasattr(QtCore.Qt, "WindowType"):  # Qt6
+        return getattr(QtCore.Qt.WindowType, flag)
+    return getattr(QtCore.Qt, flag)       # Qt5
 
 
 @qgsfunction(args=0, group='go2streetview', usesgeometry=True)
@@ -139,6 +226,7 @@ class go2streetview(gui.QgsMapTool):
     def __init__(self, iface):
 
         # Save reference to the QGIS interface
+        self.view = go2streetviewDialog()
         self.iface = iface
         # reference to the canvas
         self.canvas = self.iface.mapCanvas()
@@ -195,7 +283,6 @@ class go2streetview(gui.QgsMapTool):
         self.iface.addPluginToWebMenu(self.tr("&go2streetview"), self.StreetviewAction)
         self.dirPath = os.path.dirname(os.path.abspath(__file__))
         self.actualPOV = {}
-        self.view = go2streetviewDialog()
         self.dumView = dumWidget()
         self.dumView.enter.connect(self.clickOn)
         self.dumView.iconRif.setPixmap(QtGui.QPixmap(os.path.join(os.path.dirname(__file__), 'res', 'icoStreetview.png')))
@@ -213,18 +300,19 @@ class go2streetview(gui.QgsMapTool):
 
         self.channel = QWebChannel()
         self.channel.registerObject('backend', self)
+
         self.view.SV.page().setWebChannel(self.channel)
         self.view.BE.page().setWebChannel(self.channel)
 
-        self.view.SV.settings().setAttribute(QtWebEngineWidgets.QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        self.view.SV.settings().setAttribute(QtWebEngineWidgets.QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
-        self.view.SV.settings().setAttribute(QtWebEngineWidgets.QWebEngineSettings.ErrorPageEnabled, True)
-        self.view.SV.settings().setAttribute(QtWebEngineWidgets.QWebEngineSettings.PluginsEnabled, True)
+        self.view.SV.settings().setAttribute(web_attr("JavascriptEnabled"), True)
+        self.view.SV.settings().setAttribute(web_attr("LocalContentCanAccessRemoteUrls"), True)
+        self.view.SV.settings().setAttribute(web_attr("ErrorPageEnabled"), True)
+        self.view.SV.settings().setAttribute(web_attr("PluginsEnabled"), True)
 
-        self.view.BE.settings().setAttribute(QtWebEngineWidgets.QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        self.view.BE.settings().setAttribute(QtWebEngineWidgets.QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
-        self.view.BE.settings().setAttribute(QtWebEngineWidgets.QWebEngineSettings.ErrorPageEnabled, True)
-        self.view.BE.settings().setAttribute(QtWebEngineWidgets.QWebEngineSettings.PluginsEnabled, True)
+        self.view.BE.settings().setAttribute(web_attr("JavascriptEnabled"), True)
+        self.view.BE.settings().setAttribute(web_attr("LocalContentCanAccessRemoteUrls"), True)
+        self.view.BE.settings().setAttribute(web_attr("ErrorPageEnabled"), True)
+        self.view.BE.settings().setAttribute(web_attr("PluginsEnabled"), True)
 
         # self.view.SV.loadFinished.connect(self.handleLoaded)
 
@@ -246,13 +334,13 @@ class go2streetview(gui.QgsMapTool):
         self.position.setWidth(5)
         self.position.setIcon(gui.QgsRubberBand.ICON_CIRCLE)
         self.position.setIconSize(6)
-        self.position.setColor(QtCore.Qt.red)
+        self.position.setColor(qt_color("red"))
         self.aperture = gui.QgsRubberBand(self.iface.mapCanvas(), core.QgsWkbTypes.LineGeometry)
 
         self.digitizePosition = gui.QgsRubberBand(self.iface.mapCanvas(), core.QgsWkbTypes.PointGeometry)
         self.digitizePosition.setIcon(gui.QgsRubberBand.ICON_CIRCLE)
         self.digitizePosition.setIconSize(6)
-        self.digitizePosition.setColor(QtCore.Qt.green)
+        self.digitizePosition.setColor(qt_color("green"))
 
         self.rotateTool = transformGeometry()
         self.canvas.rotationChanged.connect(self.mapRotationChanged)
@@ -270,7 +358,7 @@ class go2streetview(gui.QgsMapTool):
         self.licenceDlg.APIkey.setText(self.APIkey)
         if terms == self.version:
             self.licenseAgree = True
-            self.licenceDlg.checkGoogle.setCheckState(QtCore.Qt.CheckState.Checked)
+            self.licenceDlg.checkGoogle.setCheckState(qt_checkstate("Checked"))
             self.licenceDlg.checkGoogle.setEnabled(False)
         else:
             self.licenseAgree = None
@@ -297,7 +385,7 @@ class go2streetview(gui.QgsMapTool):
         contextMenu = QtWidgets.QMenu()
         self.openInBrowserItem = contextMenu.addAction(QtGui.QIcon(os.path.join(self.dirPath, "res", "browser.png")), self.tr("Open in external browser"))
         self.openInBrowserItem.triggered.connect(self.openInBrowserAction)
-        self.takeSnapshopItem = contextMenu.addAction(QtGui.QIcon(os.path.join(self.dirPath, "res", "images.png")), self.tr("Take a panorama snaphot"))
+        self.takeSnapshopItem = contextMenu.addAction(QtGui.QIcon(os.path.join(self.dirPath, "res", "images.png")), self.tr("Take a panorama snapshot"))
         self.takeSnapshopItem.triggered.connect(self.takeSnapshopAction)
         self.digitizeItem = contextMenu.addAction(QtGui.QIcon(os.path.join(self.dirPath, "res", "marker_green.png")), self.tr("Digitize"))
         self.digitizeItem.triggered.connect(self.digitizeAction)
@@ -360,7 +448,7 @@ class go2streetview(gui.QgsMapTool):
         self.aboutItem.triggered.connect(self.aboutAction)
         self.view.btnMenu.setIcon(QtGui.QIcon(os.path.join(self.dirPath, "res", "down.png")))
         self.view.btnMenu.setMenu(contextMenu)
-        self.view.btnMenu.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.view.btnMenu.setPopupMode(toolbutton_popup_mode("InstantPopup"))
 
     def updateSVOptions(self):
         linksOpt = ("true" if self.viewLinks.isChecked() else "false")
@@ -411,7 +499,7 @@ class go2streetview(gui.QgsMapTool):
 
     def scanForCoverageLayer(self):
         """
-        #used for catching coverage layer if saved along with projectS
+        #used for catching coverage layer if saved along with projects
         for layer_id,layer in core.QgsProject.instance().mapLayers().items():
             if layer.type() == core.QgsMapLayer.PluginLayer and layer.id()[:19] == "Streetview_coverage":
                 self.showCoverage.blockSignals ( True )
@@ -686,7 +774,7 @@ class go2streetview(gui.QgsMapTool):
         self.position.setWidth(4)
         self.position.setIcon(gui.QgsRubberBand.ICON_CIRCLE)
         self.position.setIconSize(4)
-        self.position.setColor(QtCore.Qt.blue)
+        self.position.setColor(qt_color("blue"))
         self.position.addPoint(actualSRS)
         CS = self.canvas.mapUnitsPerPixel()*25
         zoom = float(self.actualPOV['zoom'])
@@ -699,7 +787,7 @@ class go2streetview(gui.QgsMapTool):
         self.aperture.reset()
         self.aperture = gui.QgsRubberBand(self.iface.mapCanvas(), core.QgsWkbTypes.LineGeometry)
         self.aperture.setWidth(3)
-        self.aperture.setColor(QtCore.Qt.blue)
+        self.aperture.setColor(qt_color("blue"))
         self.aperture.addPoint(core.QgsPointXY(A1x, A1y))
         self.aperture.addPoint(actualSRS)
         self.aperture.addPoint(core.QgsPointXY(A2x, A2y))
@@ -714,7 +802,7 @@ class go2streetview(gui.QgsMapTool):
             self.digitizePosition = gui.QgsRubberBand(self.iface.mapCanvas(), core.QgsWkbTypes.PointGeometry)
             self.digitizePosition.setIcon(gui.QgsRubberBand.ICON_CIRCLE)
             self.digitizePosition.setIconSize(6)
-            self.digitizePosition.setColor(QtCore.Qt.green)
+            self.digitizePosition.setColor(qt_color("green"))
             self.digitizePosition.addPoint(core.QgsPointXY(actualSRS.x(), actualSRS.y()+POV_distance))
             self.digitizePosition.setToGeometry(self.rotateTool.rotate(self.digitizePosition.asGeometry(), actualSRS, angle))
             dlonlat = self.transformToWGS84(self.digitizePosition.asGeometry().asPoint())
@@ -751,8 +839,12 @@ class go2streetview(gui.QgsMapTool):
 
     def apdockChangeVisibility(self, vis):
         if not vis:
-            self.position.reset()
-            self.aperture.reset()
+            if hasattr(self, "position"):
+                self.position.reset()
+
+            if hasattr(self, "aperture"):
+                self.aperture.reset()
+                
             self.disableControlShape()
             try:
                 self.StreetviewAction.setIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), 'res', 'icoStreetview_gray.png')))
@@ -820,7 +912,7 @@ class go2streetview(gui.QgsMapTool):
         self.view.setWindowTitle("Google Street View")
 
     def openInBrowserBE(self):
-        # open an external browser with the google maps url for location/heading
+        # open an external browser with the Google Maps url for location/heading
         p = self.snapshotOutput.setCurrentPOV()
         webbrowser.open_new("https://www.google.com/maps/@%s,%s,150m/data=!3m1!1e3" % (str(p['lat']), str(p['lon'])))
 
@@ -864,7 +956,7 @@ class go2streetview(gui.QgsMapTool):
         self.movex = event.pos().x()
         self.movey = event.pos().y()
         self.highlight = gui.QgsRubberBand(self.iface.mapCanvas(), core.QgsWkbTypes.LineGeometry)
-        self.highlight.setColor(QtCore.Qt.yellow)
+        self.highlight.setColor(qt_color("yellow"))
         self.highlight.setWidth(5)
         self.PressedPoint = self.canvas.getCoordinateTransform().toMapCoordinates(self.pressx, self.pressy)
         self.pointWgs84 = self.transformToWGS84(self.PressedPoint)
@@ -892,7 +984,7 @@ class go2streetview(gui.QgsMapTool):
         self.highlight.reset()
         if not self.licenseAgree:
             self.licenceDlg.checkGoogle.stateChanged.connect(self.checkLicenseAction)
-            self.licenceDlg.setWindowFlags(self.licenceDlg.windowFlags() | QtCore.Qt.WindowStaysOnTopHint)
+            self.licenceDlg.setWindowFlags(self.licenceDlg.windowFlags() | qt_window_flag("WindowStaysOnTopHint"))
             self.licenceDlg.show()
             self.licenceDlg.raise_()
             self.licenceDlg.activateWindow()
@@ -958,6 +1050,8 @@ class go2streetview(gui.QgsMapTool):
         self.view.resized.connect(self.resizeStreetview)
         gsvMessage = "Click on map and drag the cursor to the desired direction to display Google Street View"
         self.iface.mainWindow().statusBar().showMessage(gsvMessage)
+        if not hasattr(self, "dumLayer"):
+            self.dumLayer = core.QgsVectorLayer("Point?crs=EPSG:4326", "temporary_points", "memory")
         self.dumLayer.setCrs(self.iface.mapCanvas().mapSettings().destinationCrs())
         self.canvas.setMapTool(self)
 
@@ -1091,6 +1185,7 @@ class go2streetview(gui.QgsMapTool):
                     closestResult = fGeom.closestSegmentWithContext(toInfoLayerProjection.transform(p))
                     fGeom.insertVertex(closestResult[1][0], closestResult[1][1], closestResult[2])
                     cGeom = fGeom.intersection(cutBuffer)
+                    newGeom = None
                     if cGeom.isMultipart():
                         multigeom = cGeom.asMultiPolyline()
                         for geom in multigeom:

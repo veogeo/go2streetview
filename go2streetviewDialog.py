@@ -28,7 +28,10 @@ import os
 # import html.parser as HTMLParser
 import html
 import xml.sax.saxutils
-import resources_rc
+try:
+    from . import resources_rc_qt6 as resources_rc
+except ImportError:
+    from . import resources_rc_qt5 as resources_rc
 
 MAIN_DIALOG_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'ui_go2streetview.ui'))
@@ -45,6 +48,10 @@ DUM_DIALOG_CLASS, _ = uic.loadUiType(os.path.join(
 INFOBOX_DIALOG_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'ui_infoBox.ui'))
 
+def qt_checkstate(state):
+    if hasattr(QtCore.Qt, "CheckState"):  # Qt6
+        return getattr(QtCore.Qt.CheckState, state)
+    return getattr(QtCore.Qt, state)      # Qt5
 
 # create the view dialog
 class go2streetviewDialog(QtWidgets.QDockWidget, MAIN_DIALOG_CLASS):
@@ -192,7 +199,7 @@ class infobox(QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
             self.infoField.clear()
             self.infoboxHtml.clear()
             self.iconPath.clear()
-            self.enableInfoBoxCheckbox.setCheckState(QtCore.Qt.Unchecked)
+            self.enableInfoBoxCheckbox.setCheckState(qt_checkstate("Unchecked"))
             # self.infoBoxIni = {'infoLayerEnabled': None,'infoBoxTemplate': u'','infoField': '','infoBoxEnabled': None,'iconPath': '','infoLayer': '','distanceBuffer':'100'}
             self.saveIni()
 
@@ -347,19 +354,19 @@ class infobox(QtWidgets.QDialog, INFOBOX_DIALOG_CLASS):
             self.infoBoxIni = {'infoLayerEnabled': None, 'infoBoxTemplate': u'', 'infoField': '', 'infoBoxEnabled': None, 'iconPath': '', 'infoLayer': '', 'distanceBuffer': '100', "mapCommandsEnabled": None}
             self.loadPointLayers()
         if self.infoBoxIni["infoLayerEnabled"]:
-            self.enableInfoLayerCheckbox.setCheckState(QtCore.Qt.Checked)
+            self.enableInfoLayerCheckbox.setCheckState(qt_checkstate("Checked"))
         else:
-            self.enableInfoLayerCheckbox.setCheckState(QtCore.Qt.Unchecked)
+            self.enableInfoLayerCheckbox.setCheckState(qt_checkstate("Unchecked"))
         self.iconPath.setText(self.infoBoxIni["iconPath"])
         self.distanceBuffer.setText(self.infoBoxIni["distanceBuffer"])
         if self.infoBoxIni["infoBoxEnabled"]:
-            self.enableInfoBoxCheckbox.setCheckState(QtCore.Qt.Checked)
+            self.enableInfoBoxCheckbox.setCheckState(qt_checkstate("Checked"))
         else:
-            self.enableInfoBoxCheckbox.setCheckState(QtCore.Qt.Unchecked)
+            self.enableInfoBoxCheckbox.setCheckState(qt_checkstate("Unchecked"))
         if self.infoBoxIni["mapCommandsEnabled"]:
-            self.mapCommandsCheck.setCheckState(QtCore.Qt.Checked)
+            self.mapCommandsCheck.setCheckState(qt_checkstate("Checked"))
         else:
-            self.enableInfoBoxCheckbox.setCheckState(QtCore.Qt.Unchecked)
+            self.enableInfoBoxCheckbox.setCheckState(qt_checkstate("Unchecked"))
         self.infoboxHtml.setPlainText(html.unescape(self.infoBoxIni["infoBoxTemplate"]))
         self.enableInfoLayerAction(True)
         if self.infoIndex is not None and self.enableInfoLayerCheckbox.isChecked():
