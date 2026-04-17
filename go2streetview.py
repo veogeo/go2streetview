@@ -21,7 +21,8 @@
 from qgis.PyQt.QtWidgets import QApplication
 from qgis.PyQt import QtCore, QtGui, QtWidgets, QtXml, QtNetwork, uic
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, pyqtSlot, qVersion, QVariant
-from qgis.PyQt.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineSettings
+from qgis.PyQt.QtWebEngineWidgets import QWebEngineView
+from qgis.PyQt.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
 from qgis.PyQt.QtWebChannel import QWebChannel
 from qgis.PyQt import QtWebEngineWidgets
 from qgis import core, utils, gui
